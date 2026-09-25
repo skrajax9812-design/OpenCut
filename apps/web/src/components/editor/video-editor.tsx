@@ -19,7 +19,9 @@ import type {
 	TextLayer,
 } from "./types";
 import {
+	CLIP_EFFECT_DEFAULTS,
 	DEFAULT_IMAGE_DURATION,
+	TEXT_DEFAULTS,
 	clamp,
 	clipDuration,
 	formatTimecode,
@@ -201,19 +203,22 @@ export function VideoEditor() {
 		bitrate: 12,
 	});
 	const [historyDepth, setHistoryDepth] = useState(0);
-	const [panels, setPanels] = useState(() => {
-		if (typeof window === "undefined") return { media: true, inspector: true };
-		return {
-			media: window.innerWidth >= 1024,
-			inspector: window.innerWidth >= 1280,
-		};
-	});
+	const [mediaOpen, setMediaOpen] = useState(true);
+	const [inspectorOpen, setInspectorOpen] = useState(true);
+	const [size, setSize] = useState({ width: 0, height: 0 });
+	const rootRef = useRef<HTMLDivElement>(null);
 
 	clipsRef.current = clips;
 
 	const assetsById = useMemo(
 		() => new Map(assets.map((a) => [a.id, a])),
 		[assets],
+	);
+
+	const mediaInline = size.width === 0 || size.width >= 980;
+	const inspectorInline = size.width === 0 || size.width >= 1180;
+	const timelineHeight = Math.round(
+		clamp((size.height || 800) * 0.3, 150, 250),
 	);
 
 	const duration = useMemo(() => {
@@ -255,6 +260,28 @@ export function VideoEditor() {
 			for (const url of objectUrlsRef.current) URL.revokeObjectURL(url);
 			objectUrlsRef.current = [];
 		};
+	}, []);
+
+	useEffect(() => {
+		const element = rootRef.current;
+		// jsdom (and very old browsers) have no ResizeObserver
+		if (!element || typeof ResizeObserver === "undefined") {
+			const update = () =>
+				setSize({ width: window.innerWidth, height: window.innerHeight });
+			update();
+			window.addEventListener("resize", update);
+			return () => window.removeEventListener("resize", update);
+		}
+		const observer = new ResizeObserver((entries) => {
+			const rect = entries[0]?.contentRect;
+			if (rect)
+				setSize({
+					width: Math.round(rect.width),
+					height: Math.round(rect.height),
+				});
+		});
+		observer.observe(element);
+		return () => observer.disconnect();
 	}, []);
 
 	useEffect(() => {
@@ -324,12 +351,9 @@ export function VideoEditor() {
 				start: endOfTrack,
 				inPoint: 0,
 				outPoint: sourceDuration,
-				speed: 1,
-				volume: 1,
-				brightness: 1,
-				contrast: 1,
-				saturate: 1,
-				blur: 0,
+				...CLIP_EFFECT_DEFAULTS,
+				transitionIn: { type: "none", duration: 0.5 },
+				transitionOut: { type: "none", duration: 0.5 },
 			};
 			return [...prev, clip];
 		});
@@ -428,6 +452,8 @@ export function VideoEditor() {
 				...clip,
 				id: uid("clip"),
 				start: clip.start + clipDuration(clip),
+				transitionIn: { ...clip.transitionIn },
+				transitionOut: { ...clip.transitionOut },
 			};
 			setClips((prev) => [...prev, copy]);
 			setSelectedId(copy.id);
@@ -478,6 +504,7 @@ export function VideoEditor() {
 			color: "#ffffff",
 			bold: true,
 			background: true,
+			...TEXT_DEFAULTS,
 		};
 		setTexts((prev) => [...prev, layer]);
 		setSelectedId(layer.id);
@@ -628,7 +655,8 @@ export function VideoEditor() {
 
 	return (
 		<div
-			className="relative flex h-dvh flex-col bg-background text-foreground"
+			ref={rootRef}
+			className="relative flex h-dvh flex-col overflow-hidden bg-background text-foreground"
 			onDragOver={(event) => {
 				event.preventDefault();
 				setDragging(true);
@@ -650,23 +678,30 @@ export function VideoEditor() {
 				<div className="ml-auto flex items-center gap-1.5">
 					<Button
 						size="xs"
-						variant={panels.media ? "secondary" : "ghost"}
-						onClick={() =>
-							setPanels((prev) => ({ ...prev, media: !prev.media }))
-						}
+						variant={mediaOpen ? "secondary" : "ghost"}
+						onClick={() => setMediaOpen(!mediaOpen)}
 						title="Toggle media panel"
 					>
 						Media
 					</Button>
 					<Button
 						size="xs"
-						variant={panels.inspector ? "secondary" : "ghost"}
-						onClick={() =>
-							setPanels((prev) => ({ ...prev, inspector: !prev.inspector }))
-						}
-						title="Toggle inspector panel"
+						variant={inspectorOpen ? "secondary" : "ghost"}
+						onClick={() => setInspectorOpen(!inspectorOpen)}
+						title="Toggle effects & inspector panel"
 					>
-						Inspector
+						Fx
+					</Button>
+					<Button
+						size="xs"
+						variant="ghost"
+						onClick={() => {
+							setMediaOpen(false);
+							setInspectorOpen(false);
+						}}
+						title="Hide both side panels"
+					>
+						Focus
 					</Button>
 					<Button
 						size="sm"
@@ -698,8 +733,15 @@ export function VideoEditor() {
 			</header>
 
 			<div className="flex min-h-0 flex-1">
-				{panels.media ? (
-					<aside className="w-52 shrink-0 overflow-y-auto border-r border-border bg-background/60 p-2">
+				{mediaOpen ? (
+					<aside
+						className={cn(
+							"shrink-0 overflow-y-auto p-2",
+							mediaInline
+								? "w-52 border-r border-border bg-background/60"
+								: "absolute bottom-0 left-0 top-12 z-40 w-56 border-r border-border bg-background/95 shadow-2xl",
+						)}
+					>
 						<div className="mb-2 flex items-center justify-between px-1">
 							<p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
 								Media
@@ -900,7 +942,10 @@ export function VideoEditor() {
 						</div>
 					</div>
 
-					<div className="flex h-[248px] shrink-0 flex-col overflow-hidden">
+					<div
+						className="flex shrink-0 flex-col overflow-hidden"
+						style={{ height: timelineHeight }}
+					>
 						<Timeline
 							clips={clips}
 							texts={texts}
@@ -919,8 +964,15 @@ export function VideoEditor() {
 					</div>
 				</main>
 
-				{panels.inspector ? (
-					<aside className="w-64 shrink-0 overflow-y-auto border-l border-border bg-background/60">
+				{inspectorOpen ? (
+					<aside
+						className={cn(
+							"shrink-0 overflow-y-auto",
+							inspectorInline
+								? "w-64 border-l border-border bg-background/60"
+								: "absolute bottom-0 right-0 top-12 z-40 w-72 border-l border-border bg-background/95 shadow-2xl",
+						)}
+					>
 						<Inspector
 							clip={selectedClip}
 							text={selectedText}
