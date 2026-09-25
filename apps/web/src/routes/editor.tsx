@@ -1,12 +1,13 @@
 import { createFileRoute } from '@tanstack/react-router'
 
-export const Route = createFileRoute('/editor')({ component: Editor })
+import { VideoEditor } from '../components/editor/video-editor.tsx'
+
+export const Route = createFileRoute('/editor')({
+  // the editor is browser-only: canvas, WebAudio, MediaRecorder
+  ssr: false,
+  component: Editor,
+})
 
 function Editor() {
-  return (
-    <main>
-      <h1>Editor</h1>
-      <p>Coming soon.</p>
-    </main>
-  )
+  return <VideoEditor />
 }

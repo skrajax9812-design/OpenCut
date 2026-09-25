@@ -9,6 +9,12 @@ import { cloudflare } from '@cloudflare/vite-plugin'
 
 const config = defineConfig({
   resolve: { tsconfigPaths: true },
+  server: {
+    host: true,
+    port: 5173,
+    strictPort: true,
+    allowedHosts: ['.e2b.app', '.arena.ai', 'localhost'],
+  },
   plugins: [
     devtools(),
     cloudflare({ viteEnvironment: { name: 'ssr' } }),
