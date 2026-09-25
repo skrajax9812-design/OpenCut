@@ -44,6 +44,16 @@ Shortcuts: `Space` play/pause · `←/→` step a frame (`Shift` = one second) �
 - Rendering the composition is CPU bound in the browser tab; 4K sources are downscaled to
   1920px on the long edge for the canvas.
 
+## Single-file offline build
+
+```sh
+bun run build:standalone   # → standalone/editor.html
+```
+
+Produces one self-contained `editor.html` (~780 kB, JS + CSS inlined). Double-click it or
+open it with `file://` in Chrome/Edge — no server, no sandbox token, no uploads. Handy for
+testing on a real machine or sharing the prototype; rebuild after changing the source.
+
 ## Tests
 
 ```sh
